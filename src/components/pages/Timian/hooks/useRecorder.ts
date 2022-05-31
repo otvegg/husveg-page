@@ -1,29 +1,15 @@
-import { MutableRefObject, useEffect, useState } from 'react';
+import { MutableRefObject, useState } from 'react';
 import { saveAs } from 'file-saver';
+import _ from 'lodash';
+import { videoBlob } from '../../../../utils/interfaces-types';
+import { formatBytes, getDateString } from '../../../../utils/util';
 //https://huynvk.dev/blog/record-and-download-video-in-your-browser-using-javascript
-
-function formatBytes(bytes: number, decimals = 2) {
-  if (bytes === 0) return '0 Bytes';
-
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-}
-
-interface readyBlobs {
-  source: string;
-  data: Blob;
-}
 
 const useRecorder = () => {
   const [recorder, setRecorder] = useState<MediaRecorder | undefined>();
-  const [blobsToDownload, updateBlobsToDownload] = useState<readyBlobs[]>();
+  const [blobsToDownload, updateBlobsToDownload] = useState<videoBlob[]>();
+
   const initStream = async (source: boolean) => {
-    console.log(navigator.mediaDevices.getSupportedConstraints());
     navigator.mediaDevices;
     const stream = await (source
       ? navigator.mediaDevices.getDisplayMedia({ audio: true, video: true /* , aspectRatio: 19/6  */ })
@@ -33,12 +19,7 @@ const useRecorder = () => {
 
   const detectMIME = () => {
     const mimeTypes = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
-
-    for (const mimeType of mimeTypes) {
-      if (MediaRecorder.isTypeSupported(mimeType)) {
-        return mimeType;
-      }
-    }
+    for (const mimeType of mimeTypes) if (MediaRecorder.isTypeSupported(mimeType)) return mimeType;
     return '';
   };
 
@@ -48,12 +29,6 @@ const useRecorder = () => {
     onFinished: (recordedBlobs: Blob[], source: boolean) => void
   ) => {
     const stream = await initStream(source);
-    console.log(
-      stream.getTracks().forEach((track) => {
-        console.log(track.getConstraints());
-        track.applyConstraints({ aspectRatio: 16 / 9 });
-      })
-    );
     onStreamReady(stream);
     const options = { mimeType: detectMIME() };
     const recordedBlobs: Blob[] = [];
@@ -66,14 +41,11 @@ const useRecorder = () => {
     };
 
     mediaRecorder.onstop = () => {
-      console.log('onstop');
       onFinished(recordedBlobs, source);
-      console.log(stream);
       stopMediaStream(stream);
     };
 
     mediaRecorder.start();
-
     return mediaRecorder;
   };
 
@@ -88,11 +60,9 @@ const useRecorder = () => {
   const toggleRecorder = async (source: boolean, videoContainer: MutableRefObject<HTMLVideoElement | null>) => {
     try {
       if (recorder) {
-        console.log('recorder', recorder);
         recorder.stop();
         setRecorder(undefined);
       } else {
-        console.log('videocontainer', videoContainer);
         const mRecorder = await beginRecording(
           source,
           (stream: MediaStream) => {
@@ -101,11 +71,24 @@ const useRecorder = () => {
           (recordedBlobs: Blob[], source: boolean) => {
             const newBlob = combineBlobs(recordedBlobs);
             if (blobsToDownload)
-              updateBlobsToDownload([...blobsToDownload, { source: source ? 'screen' : 'camera', data: newBlob }]);
-            else updateBlobsToDownload([{ source: source ? 'screen' : 'camera', data: newBlob }]);
+              updateBlobsToDownload([
+                ...blobsToDownload,
+                {
+                  id: _.uniqueId((source ? 'screen' : 'camera') + '-'),
+                  type: source ? 'screen' : 'camera',
+                  data: newBlob,
+                },
+              ]);
+            else
+              updateBlobsToDownload([
+                {
+                  id: _.uniqueId((source ? 'screen' : 'camera') + '-'),
+                  type: source ? 'screen' : 'camera',
+                  data: newBlob,
+                },
+              ]);
           }
         );
-        console.log('mrecorder finished', mRecorder);
         setRecorder(mRecorder);
       }
     } catch (e) {
@@ -113,36 +96,34 @@ const useRecorder = () => {
     }
   };
 
+  const getBlobs = () => {
+    return blobsToDownload ? blobsToDownload : [];
+  };
+
   const download = (/* blobs: Blob[] | undefined = undefined */) => {
     //Potentially divide blobs into larger chunks in combineBlobs (to avoid nuking RAM)
     //https://stackoverflow.com/a/41410906
 
-    const transform = (timeUnit: number) => {
-      return timeUnit.toString().length > 1 ? timeUnit : '0' + (timeUnit + 1);
-    };
-
-    const date = new Date();
-    const month = transform(date.getMonth() + 1);
-    const day = transform(date.getDate());
-    const minutes = transform(date.getMinutes());
-    const hours = transform(date.getHours());
-    const dateString = date.getFullYear() + '-' + month + '-' + day + 'T' + hours + ':' + minutes;
     try {
       console.log('to download:', blobsToDownload);
       if (blobsToDownload) {
         const d = blobsToDownload.pop();
-        if (d) {
+        if (d && d.data) {
           console.log(formatBytes(d.data.size) + 'bytes');
-          saveAs(d.data, 'timian-' + d.source + '-' + dateString);
+          saveAs(d.data, 'timian-' + d.type + '-' + getDateString());
         }
       }
     } catch (e) {
       console.error(e);
     }
   };
+  const downloadBlob = (blobId: string) => {
+    const blob = blobsToDownload?.find((b) => b.id === blobId);
+    if (blob && blob.data) saveAs(blob.data, blob.id + '-' + getDateString());
+  };
 
   const isRecording = !!recorder;
-  return { toggleRecorder, download, isRecording };
+  return { toggleRecorder, download, downloadBlob, isRecording, getBlobs };
 };
 
 export default useRecorder;
