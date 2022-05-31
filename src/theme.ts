@@ -82,7 +82,7 @@ const theme = extendTheme({
   styles: {
     global: {
       'html, body': {
-        overflow: 'hidden',
+        /* overflow: 'hidden', */
       },
     },
   },
