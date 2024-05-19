@@ -21,6 +21,12 @@ function StartPage() {
               img={bris_frontImage}
               description='Hytte til leie på idylliske Søndre Sandøy'
             />
+            <BlogPostWithImage
+              path={'/timian'}
+              title='Timian'
+              img={bris_frontImage}
+              description='Timians diverse prosjekter'
+            />
           </HStack>
         </>
       </Flex>
