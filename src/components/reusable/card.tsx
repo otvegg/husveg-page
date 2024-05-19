@@ -15,7 +15,7 @@ const BlogPostWithImage = (props: BlogProps) => {
       to={path}
       borderWidth={'0px'}
       _hover={{ background: 'transparent', boxShadow: '2xl' }}
-      maxW={'445px'}
+      maxW={'300px'}
       boxShadow='xl'
       p='0'>
       <Flex flexDir='column'>
